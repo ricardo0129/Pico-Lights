@@ -1,4 +1,6 @@
 #include "tcp_client/tcp_client.h"
+#include "pixels/pixels.h"
+#include "tcp_request_body/request_body.h"
 
 using namespace tcp_client;
 
@@ -8,8 +10,8 @@ using namespace tcp_client;
 
 #define TCP_PORT 4242
 
-#define TEST_ITERATIONS 10
-#define POLL_TIME_S 5
+#define TEST_ITERATIONS 100
+#define POLL_TIME_S 20
 
 void dump_bytes(void *arg, uint32_t len) {
   uint8_t *bptr = (uint8_t *)arg;
@@ -60,7 +62,7 @@ err_t tcp_client::tcp_result(void *arg, int status) {
 
 err_t tcp_client::tcp_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-  printf("tcp_client_sent %u\n", len);
+  /*
   state->sent_len += len;
 
   if (state->sent_len >= BUF_SIZE) {
@@ -74,8 +76,8 @@ err_t tcp_client::tcp_client_sent(void *arg, struct tcp_pcb *tpcb, u16_t len) {
     // We should receive a new buffer from the server
     state->buffer_len = 0;
     state->sent_len = 0;
-    printf("Waiting for buffer from server\n");
   }
+*/
   return ERR_OK;
 }
 
@@ -115,22 +117,43 @@ err_t tcp_client::tcp_client_recv(void *arg, struct tcp_pcb *tpcb,
   // mode, if this method is called when cyw43_arch_lwip_begin IS needed
   cyw43_arch_lwip_check();
   if (p->tot_len > 0) {
-    printf("recv %d err %d\n", p->tot_len, err);
-    for (struct pbuf *q = p; q != NULL; q = q->next) {
-      dump_bytes(q->payload, q->len);
-    }
+    /*
+  for (struct pbuf *q = p; q != NULL; q = q->next) {
+    dump_bytes(q->payload, q->len);
+  }
+  */
     // Receive the buffer
     const uint16_t buffer_left = BUF_SIZE - state->buffer_len;
     state->buffer_len += pbuf_copy_partial(
         p, state->buffer + state->buffer_len,
         p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);
+    for (int i = 0; i < state->buffer_len; i++) {
+      printf("%02x ", state->buffer[i]);
+    }
+    struct RequestBody body = {0};
+    int i = 0;
+    for (; i < state->buffer_len; i += 8) {
+      request_body::deserialize_request_body(state->buffer + i, &body);
+      state->pixels[body.position % NUM_PIXELS] = body.color;
+      printf("Set pixel %u to color %u\n", body.position, body.color);
+    }
+    memmove(state->buffer, state->buffer + i, (state->buffer_len - i));
+    state->buffer_len -= i;
+    // Adjust buffer to only contain unprocessed bytes
+
+    // Update led strip
+    for (int i = 0; i < NUM_PIXELS; i++) {
+      pixels::put_pixel(state->pio, state->sm,
+                        state->pixels[i]); // turn off all pixels
+    }
+
     tcp_recved(tpcb, p->tot_len);
   }
   pbuf_free(p);
 
   // If we have received the whole buffer, send it back to the server
+  /*
   if (state->buffer_len == BUF_SIZE) {
-    printf("Writing %d bytes to server\n", state->buffer_len);
     err_t err =
         tcp_write(tpcb, state->buffer, state->buffer_len, TCP_WRITE_FLAG_COPY);
     if (err != ERR_OK) {
@@ -138,6 +161,7 @@ err_t tcp_client::tcp_client_recv(void *arg, struct tcp_pcb *tpcb,
       return tcp_result(state, -1);
     }
   }
+  */
   return ERR_OK;
 }
 
@@ -184,6 +208,9 @@ TCP_CLIENT_T *tcp_client::tcp_client_init() {
 
 void tcp_client::run_tcp_client_test() {
   TCP_CLIENT_T *state = tcp_client_init();
+  pixels::initialize_pio(&state->pio, &state->sm, &state->offset);
+  state->pixels = (uint32_t *)malloc(NUM_PIXELS * sizeof(uint32_t));
+  // This will free resources and unload our program
   if (!state) {
     return;
   }
@@ -192,12 +219,10 @@ void tcp_client::run_tcp_client_test() {
     return;
   }
   while (!state->complete) {
-    /*
-     */
-    printf("Polling...\n");
     cyw43_arch_poll();
     cyw43_arch_wait_for_work_until(make_timeout_time_ms(1000));
-    // sleep_ms(2000);
   }
   free(state);
+  pio_remove_program_and_unclaim_sm(&ws2812_program, state->pio, state->sm,
+                                    state->offset);
 }

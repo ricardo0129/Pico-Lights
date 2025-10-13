@@ -3,6 +3,7 @@
 
 #define BUF_SIZE 2048
 
+#include "hardware/pio.h"
 #include "lwip/tcp.h"
 
 struct TCP_CLIENT_T {
@@ -12,8 +13,12 @@ struct TCP_CLIENT_T {
   int buffer_len;
   int sent_len;
   bool complete;
-  int run_count;
   bool connected;
+  // LED pixel state
+  PIO pio;
+  uint sm;
+  uint offset;
+  uint32_t *pixels;
 };
 
 #endif // TCP_STRUCT_H
