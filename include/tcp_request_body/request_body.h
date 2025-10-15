@@ -10,4 +10,6 @@ namespace request_body {
 
 void deserialize_request_body(uint8_t *data, struct RequestBody *body);
 
-}
+void deserialize_pixel_update(uint8_t *data, struct PixelUpdate *update);
+
+} // namespace request_body

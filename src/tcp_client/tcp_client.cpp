@@ -9,9 +9,9 @@ using namespace tcp_client;
 #endif
 
 #define TCP_PORT 4242
+#define TCP_TIMEOUT 2000
 
-#define TEST_ITERATIONS 100
-#define POLL_TIME_S 20
+#define POLL_TIME_S 5
 
 void dump_bytes(void *arg, uint32_t len) {
   uint8_t *bptr = (uint8_t *)arg;
@@ -31,6 +31,7 @@ void dump_bytes(void *arg, uint32_t len) {
 
 err_t tcp_client::tcp_client_close(struct TCP_CLIENT_T *state) {
   err_t err = ERR_OK;
+  printf("Closing connection\n");
   if (state->tcp_pcb != NULL) {
     tcp_arg(state->tcp_pcb, NULL);
     tcp_poll(state->tcp_pcb, NULL, 0);
@@ -123,33 +124,34 @@ err_t tcp_client::tcp_client_recv(void *arg, struct tcp_pcb *tpcb,
   }
   */
     // Receive the buffer
-    const uint16_t buffer_left = BUF_SIZE - state->buffer_len;
+    const uint16_t buffer_left = BUF_SIZE;
     state->buffer_len += pbuf_copy_partial(
-        p, state->buffer + state->buffer_len,
-        p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);
-    for (int i = 0; i < state->buffer_len; i++) {
-      printf("%02x ", state->buffer[i]);
-    }
+        p, state->buffer, p->tot_len > buffer_left ? buffer_left : p->tot_len,
+        0);
     struct RequestBody body = {0};
-    int i = 0;
-    for (; i < state->buffer_len; i += 8) {
-      request_body::deserialize_request_body(state->buffer + i, &body);
-      state->pixels[body.position % NUM_PIXELS] = body.color;
-      printf("Set pixel %u to color %u\n", body.position, body.color);
+    request_body::deserialize_request_body(state->buffer, &body);
+    struct PixelUpdate update = {0};
+    for (int i = 0; i < body.body_size; i++) {
+      request_body::deserialize_pixel_update(body.body_data + i * 8, &update);
+      if (update.position >= NUM_PIXELS) {
+        continue;
+      }
+      state->pixels[update.position] = update.color;
     }
-    memmove(state->buffer, state->buffer + i, (state->buffer_len - i));
-    state->buffer_len -= i;
-    // Adjust buffer to only contain unprocessed bytes
-
     // Update led strip
     for (int i = 0; i < NUM_PIXELS; i++) {
       pixels::put_pixel(state->pio, state->sm,
                         state->pixels[i]); // turn off all pixels
     }
-
     tcp_recved(tpcb, p->tot_len);
   }
   pbuf_free(p);
+  // Send acknowledgment
+  err_t r_err = tcp_write(tpcb, "OK", 2, TCP_WRITE_FLAG_COPY);
+  if (r_err != ERR_OK) {
+    printf("Failed to write data %d\n", r_err);
+    return tcp_result(state, -1);
+  }
 
   // If we have received the whole buffer, send it back to the server
   /*
@@ -220,7 +222,7 @@ void tcp_client::run_tcp_client_test() {
   }
   while (!state->complete) {
     cyw43_arch_poll();
-    cyw43_arch_wait_for_work_until(make_timeout_time_ms(1000));
+    cyw43_arch_wait_for_work_until(make_timeout_time_ms(TCP_TIMEOUT));
   }
   free(state);
   pio_remove_program_and_unclaim_sm(&ws2812_program, state->pio, state->sm,

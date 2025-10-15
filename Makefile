@@ -1,8 +1,8 @@
-build:
-	cmake -S . -B build/pico2_w -DPICO_BOARD=pico2_w && cmake --build build/pico2_w
-	cmake -S . -B build/pico_w -DPICO_BOARD=pico_w && cmake --build build/pico_w
-
-upload:
-	cmake -S . -B build/pico2_w -DPICO_BOARD=pico2_w && cmake --build build/pico2_w
-	
-
+update:
+	cmake -S . -B build/$(board) -DPICO_BOARD=pico2_w && cmake --build build/$(board)
+	sudo /home/ricky/Desktop/embedded/picotool/build/picotool load build/$(board)/pico_lights.uf2
+	sudo /home/ricky/Desktop/embedded/picotool/build/picotool reboot
+debug:
+	cmake -S . -B build/$(board) -DPICO_BOARD=pico2_w -DCMAKE_BUILD_TYPE=Debug && cmake --build build/$(board)
+	sudo /home/ricky/Desktop/embedded/picotool/build/picotool load build/$(board)/pico_lights.elf
+	sudo /home/ricky/Desktop/embedded/picotool/build/picotool reboot

@@ -99,10 +99,8 @@ fn coordinator_loop(mut state: Arc<Mutex<State>>, mut barrier: Arc<Barrier>) {
     let mut tick: u32 = 0;
     loop {
         barrier.wait();
-        println!("Coordinator: all workers finished this round.");
         update_loop(&mut state.lock().unwrap(), tick);
         tick += 1;
-        thread::sleep(std::time::Duration::from_millis(100));
         barrier.wait();
     }
 }
@@ -118,7 +116,6 @@ fn handle_client(
     let mut start_time = std::time::Instant::now();
     let mut updates: u64 = 0;
     loop {
-        println!("Work..");
         let mut buffer: Vec<u8> = vec![];
         let queue_len = state.lock().unwrap().workers[worker_id as usize - 1]
             .queue
@@ -133,10 +130,8 @@ fn handle_client(
         }
         if queue_len > 0 {
             stream.write(&buffer).unwrap();
-            println!("Sent {} bytes to worker {}", buffer.len(), worker_id);
             let mut receive_buffer = [0; 2];
             stream.read(&mut receive_buffer).unwrap();
-            println!("Worker {}: received {:?}", worker_id, receive_buffer);
         }
         let elapsed = start_time.elapsed();
         if elapsed.as_secs() >= 1 {
