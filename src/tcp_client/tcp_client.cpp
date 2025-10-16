@@ -118,11 +118,6 @@ err_t tcp_client::tcp_client_recv(void *arg, struct tcp_pcb *tpcb,
   // mode, if this method is called when cyw43_arch_lwip_begin IS needed
   cyw43_arch_lwip_check();
   if (p->tot_len > 0) {
-    /*
-  for (struct pbuf *q = p; q != NULL; q = q->next) {
-    dump_bytes(q->payload, q->len);
-  }
-  */
     // Receive the buffer
     const uint16_t buffer_left = BUF_SIZE;
     state->buffer_len += pbuf_copy_partial(

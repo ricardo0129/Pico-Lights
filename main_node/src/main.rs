@@ -101,6 +101,7 @@ fn coordinator_loop(mut state: Arc<Mutex<State>>, mut barrier: Arc<Barrier>) {
         barrier.wait();
         update_loop(&mut state.lock().unwrap(), tick);
         tick += 1;
+        thread::sleep(std::time::Duration::from_millis(500));
         barrier.wait();
     }
 }
