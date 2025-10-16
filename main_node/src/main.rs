@@ -4,7 +4,7 @@ use std::sync::{Arc, Barrier, Mutex};
 use std::thread;
 
 const NUM_PIXELS: u32 = 50;
-const WORKER_COUNT: usize = 1;
+const WORKER_COUNT: usize = 2;
 
 struct Request {
     color: u32,
@@ -113,6 +113,9 @@ fn handle_client(
 ) {
     // Read from stream
     let worker_id = add_worker(&mut state.lock().unwrap());
+    while state.lock().unwrap().workers.len() < worker_id as usize {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
     println!("Worker {} connected", worker_id);
     let mut start_time = std::time::Instant::now();
     let mut updates: u64 = 0;
